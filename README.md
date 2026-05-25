@@ -168,25 +168,76 @@ sistema-gestion-hotel/
 
 ## Pruebas incluidas
 
-Las pruebas están organizadas por módulo y aplican las técnicas de **Partición de Equivalencia (PE)** y **Análisis de Valores Límite (AVL)**.
+Las pruebas son de caja negra, las cuales validan el comportamiento observable del sistema sin depender de la implementación interna, utilizando **JUnit 5**. Estas están organizadas por módulos empleando las técnicas de **Partición de Equivalencia (PE)** y **Análisis de Valores Límite (AVL)**.
 
-<table>
-  <tr>
-    <th align="left">Módulo</th>
-    <th align="left">Técnica</th>
-    <th align="left">Casos</th>
-  </tr>
-  <tr><td>Clientes</td><td>PE</td><td>7</td></tr>
-  <tr><td>Habitaciones</td><td>PE + AVL</td><td>11</td></tr>
-  <tr><td>Reservas</td><td>PE + AVL</td><td>12</td></tr>
-  <tr><td>Check-in / Check-out</td><td>PE</td><td>5</td></tr>
-  <tr><td>Facturación</td><td>PE + AVL</td><td>6</td></tr>
-  <tr><td>Flujo completo</td><td>PE integración</td><td>2</td></tr>
-</table>
+### Módulo 1: Gestión de Clientes (7 casos)
+| ID | Técnica | Nombre de la Prueba | Descripción |
+| :--- | :---: | :--- | :--- |
+| **PE-C01** | PE | Registrar cliente válido | Valida el registro exitoso cuando se ingresan datos completos y correctos (DNI, nombre, apellido, teléfono, email). |
+| **PE-C02** | PE | DNI nulo, vacío o con espacios | Verifica que el sistema rechace y lance un `IllegalArgumentException` si el DNI no contiene datos válidos. |
+| **PE-C03** | PE | Email sin arroba (`@`) o vacío | Comprueba que se valide el formato del correo electrónico, lanzando una excepción si es inválido. |
+| **PE-C04** | PE | Registrar DNI duplicado | Asegura que no se puedan registrar dos clientes con el mismo documento de identidad en el sistema. |
+| **PE-C05** | PE | Buscar cliente existente | Verifica que la búsqueda por DNI devuelva el objeto `Cliente` correcto envuelto en un `Optional`. |
+| **PE-C06** | PE | Buscar cliente inexistente | Valida que al buscar un DNI no registrado, el sistema responda con un contenedor vacío de forma segura. |
+| **PE-C07** | PE | Obtener nombre completo | Comprueba que el método de dominio concatene correctamente el nombre y el apellido del cliente. |
 
-**Total: 43 casos de prueba**
+### Módulo 2: Registro de Habitaciones (11 casos)
+| ID | Técnica | Nombre de la Prueba | Descripción |
+| :--- | :---: | :--- | :--- |
+| **PE-H01** | PE | Crear habitación válida | Valida la correcta asignación de número, tipo, precio base y que su estado inicial sea `DISPONIBLE`. |
+| **AVL-H02** | AVL | Número de habitación = 0 | Límite inferior inválido: Verifica que se rechace el número cero con una excepción. |
+| **AVL-H03** | AVL | Número de habitación = 1 | Límite inferior válido: Asegura que el sistema acepte el primer número entero positivo. |
+| **AVL-H04** | AVL | Número de habitación negativo | Límite inválido: Comprueba el rechazo absoluto de números menores a cero. |
+| **AVL-H05** | AVL | Precio cero o negativo | Frontera inválida: Evalúa mediante pruebas parametrizadas que precios `0.0`, `-1.0` y `-100.0` lancen error. |
+| **AVL-H06** | AVL | Precio mínimo válido (0.01) | Frontera válida: Valida que el sistema admita tarifas de habitación desde un centavo en adelante. |
+| **PE-H07** | PE | Tipo de habitación nulo | Verifica que no se permita registrar una habitación sin especificar su enumeración (`SIMPLE`, `DOBLE`, `SUITE`). |
+| **PE-H08** | PE | Registrar habitación duplicada | Previene la colisión de inventario impidiendo que se registren dos habitaciones con el mismo número. |
+| **PE-H09** | PE | Listar habitaciones disponibles | Valida que los filtros de consulta reflejen únicamente los cuartos aptos para la renta. |
+| **PE-H10** | PE | Cambiar estado de habitación | Evalúa la correcta transición interna a estados operativos como `MANTENIMIENTO` u `OCUPADA`. |
+| **PE-H11** | PE | Cambiar estado a nulo | Previene corrupción de datos asegurando que no se pueda setear un estado vacío. |
 
-Las pruebas son de **caja negra**: validan el comportamiento observable del sistema sin depender de la implementación interna.
+### Módulo 3: Gestión de Reservas (12 casos)
+| ID | Técnica | Nombre de la Prueba | Descripción |
+| :--- | :---: | :--- | :--- |
+| **PE-R01** | PE | Crear reserva válida | Verifica que una reserva correcta genere un ID único, estado `CONFIRMADA` y calcule bien las noches. |
+| **AVL-R02** | AVL | Fecha de salida igual a entrada | Límite inválido: Asegura que una estancia de cero horas (mismo día) sea rechazada en el negocio. |
+| **AVL-R03** | AVL | Fecha de salida anterior a entrada | Límite inválido: Valida el bloqueo de inconsistencias temporales (viajes en el tiempo). |
+| **AVL-R04** | AVL | Reserva de exactamente 1 noche | Límite mínimo válido: Comprueba que el cálculo de noches funcione perfectamente en el paso de frontera más corto. |
+| **PE-R05** | PE | Reservar habitación ocupada/mantenimiento | Asegura que el sistema bloquee intentos de reserva si la habitación no está en estado `DISPONIBLE`. |
+| **PE-R06** | PE | Cliente nulo en reserva | Verifica que se rechace la operación si falta la entidad del huésped responsable. |
+| **PE-R07** | PE | Habitación nula en reserva | Verifica que se lance una excepción si no se asocia un cuarto físico a la reserva. |
+| **PE-R08** | PE | Fechas nulas | Comprueba que omitir la fecha de ingreso o de salida aborte el flujo lanzando un error de argumento. |
+| **PE-R09** | PE | Cancelar reserva confirmada | Valida que la cancelación cambie el estado a `CANCELADA` y libere automáticamente la habitación vinculada. |
+| **PE-R10** | PE | Cancelar reserva ya cancelada | Control de flujo: Bloquea operaciones redundantes lanzando una excepción de estado ilegal. |
+| **PE-R11** | PE | Activar reserva no confirmada | Previene violaciones de negocio impidiendo el Check-in directo de una reserva previamente cancelada. |
+| **PE-R12** | PE | Finalizar reserva no activa | Asegura que no se pueda dar Check-out a estadías que nunca pasaron por el proceso de Check-in. |
+
+### Módulo 4: Check-in y Check-out (5 casos)
+| ID | Técnica | Nombre de la Prueba | Descripción |
+| :--- | :---: | :--- | :--- |
+| **PE-CI01** | PE | Check-in activa la reserva | Al llegar el huésped, cambia el estado de la reserva a `ACTIVA` para permitir la ocupación oficial. |
+| **PE-CI02** | PE | Check-in con ID inexistente | Asegura el control de errores si se ingresa un código de reserva que no existe en el sistema. |
+| **PE-CO01** | PE | Check-out finaliza y factura | Al retirarse el cliente, cierra la reserva como `FINALIZADA`, libera el cuarto y dispara la creación de su factura. |
+| **PE-CO02** | PE | Check-out sin check-in previo | Valida las reglas de secuencia, impidiendo facturar a alguien que reglamentariamente no ha ingresado. |
+| **PE-CO03** | PE | Check-out con ID inexistente | Verifica el rechazo seguro ante códigos de salida erróneos o manipulados manualmente. |
+
+### Módulo 5: Facturación (6 casos)
+| ID | Técnica | Nombre de la Prueba | Descripción |
+| :--- | :---: | :--- | :--- |
+| **PE-F01** | PE | Generación de factura válida | Evalúa que los montos clave se desglosen correctamente: Subtotal, cálculo exacto del **18% de IGV** y la suma Total. |
+| **PE-F02** | PE | Facturar reserva no finalizada | Asegura que no se emita un comprobante de pago si el cliente no ha pasado por el flujo formal de Check-out. |
+| **PE-F03** | PE | Factura con reserva nula | Comprueba que el constructor financiero aborte si no se le proveen los datos base de un hospedaje. |
+| **AVL-F04** | AVL | Factura de 1 noche (Mínimo) | Verifica la exactitud matemática del subtotal e impuestos cobrados sobre la estancia mínima permitida. |
+| **AVL-F05** | AVL | Cálculo parametrizado por noches | Procesa en lote una matriz de prueba (`CsvSource`) para certificar las matemáticas del negocio a las 1, 3, 5 y 10 noches. |
+| **PE-F06** | PE | Listar facturas generadas | Asegura el correcto almacenamiento histórico de todos los comprobantes emitidos en el hotel. |
+
+### Módulo 6: Integración del Flujo Completo (2 casos)
+| ID | Técnica | Nombre de la Prueba | Descripción |
+| :--- | :---: | :--- | :--- |
+| **PE-INT01** | PE | Flujo feliz de punta a punta | **Prueba de integración integral**: Simula todo el comportamiento lógico del software. Registra un cliente/habitación → Crea reserva → Hace Check-in → Hace Check-out → Valida la consistencia del dinero de la Factura → Libera el cuarto. |
+| **PE-INT02** | PE | Reutilización de habitación | Evalúa la persistencia reactiva asegurando que, al cancelar una reserva, el cuarto quede disponible de inmediato para otro cliente. |
+
+**Total: 43 casos de prueba cubiertos con éxito.**
 
 ---
 
@@ -203,18 +254,57 @@ Fachada principal del sistema.
 - `cancelarReserva(String idReserva)`
 - `realizarCheckIn(String idReserva)`
 - `realizarCheckOut(String idReserva)`
+- `listarHabitacionesDisponibles()`
+- `listarReservas()`
+- `listarFacturas()`
 
 ### `hotel.Cliente`
 Entidad cliente con validación de datos y `getNombreCompleto()`.
 
+- `getDni()`
+- `getNombre()`
+- `getApellido()`
+- `getTelefono()`
+- `getEmail()`
+- `getNombreCompleto()`
+
 ### `hotel.Habitacion`
 Entidad habitación con validación de número, tipo y precio, y estado disponible/ocupada/mantenimiento.
+
+- `getNumero()`
+- `getTipo()`
+- `getPrecioPorNoche()`
+- `getEstado()`
+- `isDisponible()`
+- `setEstado(EstadoHabitacion estado)`
 
 ### `hotel.Reserva`
 Entidad reserva con cálculo de noches, costo total y control de estados: confirmar, activar, finalizar y cancelar.
 
+- `getId()`
+- `getCliente()`
+- `getHabitacion()`
+- `getFechaEntrada()`
+- `getFechaSalida()`
+- `getEstado()`
+- `getNochesReservadas()`
+- `calcularCostoTotal()`
+- `confirmar()`
+- `cancelar()`
+- `activar()`
+- `finalizar()`
+- `resetContador()`
+
 ### `hotel.Factura`
 Entidad factura que calcula subtotal, IGV y total a partir de una reserva finalizada.
+
+- `getNumeroFactura()`
+- `getReserva()`
+- `getSubtotal()`
+- `getIgv()`
+- `getTotal()`
+- `getFechaEmision()`
+- `resetContador()`
 
 ---
 
